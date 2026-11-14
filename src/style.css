@@ -1,0 +1,110 @@
+:root {
+  --fg: #111;
+  --bg: #fff;
+  --sub: #666;
+  --line: #bbb;
+  --accent: #1a5fb4;
+  --soft: #f3f3f3;
+  font-family: 'Hiragino Maru Gothic ProN', 'Hiragino Sans', sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); }
+body { overscroll-behavior: none; }
+button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+#app { min-height: 100%; }
+
+/* ---- 子ども：ホーム ---- */
+.home { height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px; }
+.home h1 { font-size: 34px; margin: 0; }
+.big { min-width: 360px; min-height: 96px; font-size: 32px; border-radius: 24px; border: 4px solid var(--fg); background: var(--bg); padding: 12px 28px; }
+.big.primary { background: var(--fg); color: var(--bg); }
+.adult { position: fixed; right: 12px; bottom: 12px; min-height: 44px; padding: 8px 14px; font-size: 14px; color: var(--sub); border: 1px solid var(--line); border-radius: 22px; background: var(--bg); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.adult .bar { display: block; height: 3px; width: 0; background: var(--sub); margin-top: 4px; transition: width 0s; }
+.adult.pressing .bar { width: 100%; transition: width 1.2s linear; }
+.warn { color: #a00; font-size: 16px; max-width: 560px; text-align: center; }
+
+/* ---- 子ども：問題 ---- */
+.play { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.play header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-height: 64px; }
+.play .caption { flex: 1; font-size: 22px; }
+.play .progress { font-size: 16px; color: var(--sub); }
+.icon { min-width: 56px; min-height: 56px; border-radius: 28px; border: 3px solid var(--fg); background: var(--bg); font-size: 26px; }
+.icon.small { min-width: 44px; min-height: 44px; border-width: 1px; border-color: var(--line); font-size: 18px; color: var(--sub); }
+.icon.listening { animation: pulse 1s infinite; }
+@keyframes pulse { 50% { transform: scale(1.12); } }
+.stage { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 4px 16px; min-height: 0; }
+.stim { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34vh; width: 100%; flex: none; }
+.stim .label { font-size: 16px; color: var(--sub); writing-mode: vertical-rl; }
+.stim .pic { height: 100%; display: flex; justify-content: center; max-width: 92%; }
+.stim svg { height: 100%; width: auto; max-width: 100%; }
+.choices { flex: 1; display: grid; gap: 12px; width: 100%; max-width: 1000px; min-height: 0; align-content: center; }
+.choice { position: relative; border: 3px solid var(--line); border-radius: 14px; background: var(--bg); padding: 6px; min-height: 64px; display: flex; align-items: center; justify-content: center; }
+.choice svg { width: 100%; height: 100%; max-height: 100%; }
+.choices.dense .choice { padding: 3px; }
+.choice:disabled { opacity: 1; }
+.choice .mark { position: absolute; inset: -6px; pointer-events: none; }
+.choice.answer { border: 6px solid var(--fg); }
+.play.ph-listening .choice { filter: grayscale(1) opacity(0.75); }
+.play footer { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 10px 12px 16px; min-height: 92px; }
+.go { min-width: 240px; min-height: 72px; font-size: 28px; border-radius: 36px; border: 4px solid var(--fg); background: var(--fg); color: var(--bg); }
+.go.ghost { background: var(--bg); color: var(--fg); }
+.go:disabled { border-color: var(--line); background: var(--soft); color: var(--sub); }
+.feedback { font-size: 20px; text-align: center; flex: 1; min-width: 0; max-width: 760px; }
+.feedback b { font-size: 30px; display: block; }
+.overlay { position: fixed; inset: 0; background: rgba(255, 255, 255, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; z-index: 10; font-size: 26px; }
+
+/* ---- 子ども：おしまい ---- */
+.done { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.done h1 { font-size: 34px; }
+.review { width: 100%; max-width: 900px; display: grid; gap: 12px; }
+.review .item { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 56px 1fr; gap: 8px; align-items: start; }
+.review .res { font-size: 36px; text-align: center; }
+.review .mini { display: grid; gap: 6px; }
+.review .mini svg { max-height: 80px; width: 100%; }
+
+/* ---- 保護者 ---- */
+.parent { max-width: 980px; margin: 0 auto; padding: 16px; font-size: 16px; }
+.parent h1 { font-size: 22px; display: flex; justify-content: space-between; align-items: center; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs button { min-height: 44px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 22px; background: var(--bg); }
+.tabs button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.parent table { border-collapse: collapse; width: 100%; }
+.parent th, .parent td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; }
+.parent td.num, .parent th.num { text-align: right; white-space: nowrap; }
+.btn { min-height: 44px; padding: 6px 16px; border: 1px solid var(--fg); border-radius: 8px; background: var(--bg); }
+.btn.primary { background: var(--fg); color: var(--bg); }
+.btn.sel { background: var(--fg); color: var(--bg); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.note { color: var(--sub); font-size: 14px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; }
+.mark3 button { min-width: 52px; }
+.gate { display: flex; flex-direction: column; gap: 12px; align-items: center; padding-top: 18vh; font-size: 22px; }
+.gate input { font-size: 28px; width: 140px; text-align: center; min-height: 52px; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; min-height: 44px; margin-right: 12px; }
+select { font: inherit; min-height: 40px; }
+
+/* ---- 印刷 ---- */
+.printbar { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; z-index: 2; }
+.sheet { width: 210mm; margin: 12px auto; padding: 12mm; background: #fff; color: #000; box-shadow: 0 0 0 1px var(--line); }
+.sheet h2 { font-size: 14pt; margin: 0 0 6mm; display: flex; justify-content: space-between; }
+.pq { break-inside: avoid; page-break-inside: avoid; margin-bottom: 8mm; display: grid; grid-template-columns: 10mm 1fr; gap: 3mm; }
+.pq .no { font-size: 16pt; font-weight: bold; }
+.pq .stimp svg { max-height: 45mm; max-width: 100%; }
+.pq .chp { display: grid; gap: 3mm; margin-top: 3mm; }
+.pq .chp svg { width: 100%; max-height: 40mm; }
+.pq.dotsq .chp svg, .pq.dotsq .stimp svg { max-height: 60mm; }
+.pq .dotsrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+.pq .dotsrow svg { width: 100%; max-height: 60mm; }
+.ptable { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+.ptable td, .ptable th { border: 1px solid #000; padding: 2mm; vertical-align: top; }
+.ptable tr { break-inside: avoid; page-break-inside: avoid; }
+@page { size: A4 portrait; margin: 0; }
+@media print {
+  .printbar, .noprint { display: none !important; }
+  .sheet { margin: 0; box-shadow: none; width: auto; break-after: page; }
+  body.only-child .sheet.parent-sheet { display: none; }
+  body.only-parent .sheet.child-sheet { display: none; }
+}

@@ -1,9 +1,61 @@
-import { defineConfig } from 'vite';
-import { resolve } from 'node:path';
+import { defineConfig, type Plugin } from 'vite';
+import { resolve, relative, join } from 'node:path';
+import { readdirSync, statSync, writeFileSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+
+/** ビルド後の全ファイルを事前キャッシュする Service Worker を書き出す（オフライン起動用） */
+function serviceWorker(): Plugin {
+  return {
+    name: 'precache-sw',
+    apply: 'build',
+    writeBundle(opts) {
+      const dir = opts.dir!;
+      const files: string[] = [];
+      const walk = (d: string) => {
+        for (const f of readdirSync(d)) {
+          const p = join(d, f);
+          if (statSync(p).isDirectory()) walk(p);
+          else if (f !== 'sw.js' && !f.endsWith('.map')) files.push(relative(dir, p).split('\\').join('/'));
+        }
+      };
+      walk(dir);
+      files.sort();
+      const hash = createHash('sha256');
+      for (const f of files) hash.update(f).update(readFileSync(join(dir, f)));
+      const version = hash.digest('hex').slice(0, 12);
+      const list = JSON.stringify(['./', ...files.map((f) => `./${f}`)], null, 1);
+      writeFileSync(
+        join(dir, 'sw.js'),
+        `// 自動生成（vite.config.ts）
+const CACHE = 'pp-${version}';
+const FILES = ${list};
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+  );
+});
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  e.respondWith(
+    caches.match(req, { ignoreSearch: true }).then(
+      (hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : null) || fetch(req),
+    ).then((r) => r || fetch(req)),
+  );
+});
+`,
+      );
+    },
+  };
+}
 
 export default defineConfig({
   // GitHub Pages のサブパスでも動くよう相対パスで出力する
   base: './',
+  plugins: [serviceWorker()],
   build: {
     rollupOptions: {
       input: {
