@@ -30,7 +30,10 @@ function serviceWorker(): Plugin {
 const CACHE = 'pp-${version}';
 const FILES = ${list};
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // HTTPキャッシュを通さずに取得し，古いHTMLを保存しないようにする
+  e.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()),
+  );
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -41,9 +44,10 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   if (req.mode === 'navigate') {
-    // ページ本体はオンラインなら最新を取り，オフラインのときだけキャッシュを使う（版の食い違いを防ぐ）
+    // ページ本体はオンラインなら最新を取り，オフラインのときだけキャッシュを使う（版の食い違いを防ぐ）．
+    // GitHub Pages は10分間のHTTPキャッシュを許すので，cache: 'no-cache' で毎回サーバーに確認する
     e.respondWith(
-      fetch(req)
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then((r) => (r.ok ? r : Promise.reject(r)))
         .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html'))),
     );
