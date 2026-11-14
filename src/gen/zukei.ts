@@ -119,7 +119,7 @@ export const shape: Skill = {
     const match = p.level === 1 ? (c: Cell[]) => congruent(c) : (c: Cell[]) => sameUnderRotation(base, c, size);
     const hits = p.choices.map((c) => match(cellsOf(c)));
     if (hits.filter(Boolean).length !== 1) return `一致する選択肢が${hits.filter(Boolean).length}個`;
-    return hits[p.answer] ? null : '正答が違う';
+    return hits[p.answers[0]] ? null : '正答が違う';
   },
 };
 
@@ -173,7 +173,7 @@ function tryShape(level: Level, seed: number, s: number): Problem | null {
     stimulus: { kind: 'cells', size, cells: base },
     choices,
     cols: 4,
-    answer,
+    answers: [answer],
     explain:
       level === 1
         ? 'くろい ますの ばしょを ひとつずつ みほんと くらべる．'
@@ -185,23 +185,83 @@ function tryShape(level: Level, seed: number, s: number): Problem | null {
 
 const PLACEABLE = CARDS.filter((c) => c.category !== 'kazoe').map((c) => c.id);
 
+type Dir = 'うえ' | 'した' | 'ひだり' | 'みぎ';
+const NUM = ['いち', 'に', 'さん', 'よん', 'ご'];
+
+/** 指示文から「どちらから何番目」を読み取る（1〜2段） */
+function parsePosition(caption: string): { dir: Dir; no: number }[] {
+  return [...caption.matchAll(/(うえ|した|ひだり|みぎ)から (\S+?)ばんめ/g)].map((m) => ({
+    dir: m[1] as Dir,
+    no: NUM.indexOf(m[2]) + 1,
+  }));
+}
+
+/** 指示どおりに数えたときの行・列（0始まり） */
+function locate(steps: { dir: Dir; no: number }[], rows: number, cols: number): { r: number; c: number } {
+  let r = 0;
+  let c = 0;
+  for (const { dir, no } of steps) {
+    if (dir === 'うえ') r = no - 1;
+    if (dir === 'した') r = rows - no;
+    if (dir === 'ひだり') c = no - 1;
+    if (dir === 'みぎ') c = cols - no;
+  }
+  return { r, c };
+}
+
+/** 解説用：数える道すじの各マスに付ける番号（例：「↓2 →3」） */
+export function positionMarks(p: Problem): Map<number, string> {
+  const cols = p.cols ?? p.choices.length;
+  const rows = Math.ceil(p.choices.length / cols);
+  const steps = parsePosition(p.caption);
+  const { r, c } = locate(steps, rows, cols);
+  const arrow: Record<Dir, string> = { うえ: '↓', した: '↑', ひだり: '→', みぎ: '←' };
+  const marks = new Map<number, string[]>();
+  const add = (rr: number, cc: number, s: string) => {
+    const i = rr * cols + cc;
+    marks.set(i, [...(marks.get(i) ?? []), s]);
+  };
+  for (const { dir, no } of steps) {
+    for (let k = 1; k <= no; k++) {
+      if (dir === 'うえ') add(k - 1, c, `${arrow[dir]}${k}`);
+      if (dir === 'した') add(rows - k, c, `${arrow[dir]}${k}`);
+      if (dir === 'ひだり') add(r, k - 1, `${arrow[dir]}${k}`);
+      if (dir === 'みぎ') add(r, cols - k, `${arrow[dir]}${k}`);
+    }
+  }
+  return new Map([...marks].map(([i, v]) => [i, v.join(' ')]));
+}
+
 export const position: Skill = {
   id: 'position',
   domain: 'zukei',
   name: 'ばしょ（なんばんめ）',
-  weight: 0.8,
-  levels: [1, 2],
+  weight: 0.9,
+  levels: [1, 2, 3],
   generate(level, seed) {
     const rng = new Rng(seed);
-    const n = level === 1 ? 3 : 4;
-    const ids = rng.sample(PLACEABLE, n * n);
-    const r = rng.int(0, n - 1);
-    const c = rng.int(0, n - 1);
-    const fromTop = level === 1 || rng.next() < 0.5;
-    const fromLeft = level === 1 || rng.next() < 0.5;
-    const rowNo = fromTop ? r + 1 : n - r;
-    const colNo = fromLeft ? c + 1 : n - c;
-    const v = `${fromTop ? 'うえ' : 'した'}から ${banme(rowNo)}，${fromLeft ? 'ひだり' : 'みぎ'}から ${banme(colNo)}`;
+    let rows: number;
+    let cols: number;
+    let steps: { dir: Dir; no: number }[];
+    if (level === 1) {
+      // 基礎：1列だけ．うえ・した・ひだり・みぎ をそれぞれ単独で
+      const dir = rng.pick(['うえ', 'した', 'ひだり', 'みぎ'] as const);
+      const n = 5;
+      [rows, cols] = dir === 'うえ' || dir === 'した' ? [n, 1] : [1, n];
+      steps = [{ dir, no: rng.int(1, n) }];
+    } else {
+      const n = level === 2 ? 3 : 4;
+      rows = cols = n;
+      const v: Dir = level === 2 || rng.next() < 0.5 ? 'うえ' : 'した';
+      const hz: Dir = level === 2 || rng.next() < 0.5 ? 'ひだり' : 'みぎ';
+      steps = [
+        { dir: v, no: rng.int(1, n) },
+        { dir: hz, no: rng.int(1, n) },
+      ];
+    }
+    const ids = rng.sample(PLACEABLE, rows * cols);
+    const { r, c } = locate(steps, rows, cols);
+    const v = steps.map((s) => `${s.dir}から ${banme(s.no)}`).join('，');
     return {
       key: keyOf('position', level, seed),
       skill: 'position',
@@ -209,21 +269,23 @@ export const position: Skill = {
       speech: `${v}に ある ものに まるを つけましょう．`,
       caption: v,
       choices: ids.map((id): Visual => ({ kind: 'card', id })),
-      cols: n,
-      answer: r * n + c,
-      explain: `${v}は ${CARD_BY_ID[ids[r * n + c]].name}．ゆびで ひとつずつ かぞえる．`,
+      cols,
+      answers: [r * cols + c],
+      explain: `${v}は ${CARD_BY_ID[ids[r * cols + c]].name}．${steps.map((s) => `${s.dir}から`).join('，')} ゆびで ひとつずつ かぞえる．`,
     };
   },
   check(p) {
     const e = basicCheck(p);
     if (e) return e;
-    const n = p.cols!;
-    const m = p.caption.match(/(うえ|した)から (\S+)ばんめ，(ひだり|みぎ)から (\S+)ばんめ/);
-    if (!m) return '指示文を読めない';
-    const num = (s: string) => ['いち', 'に', 'さん', 'よん'].indexOf(s) + 1;
-    const r = m[1] === 'うえ' ? num(m[2]) - 1 : n - num(m[2]);
-    const c = m[3] === 'ひだり' ? num(m[4]) - 1 : n - num(m[4]);
-    return p.answer === r * n + c ? null : '正答の位置が違う';
+    const cols = p.cols!;
+    const rows = Math.ceil(p.choices.length / cols);
+    const steps = parsePosition(p.caption);
+    if (!steps.length || steps.some((s) => s.no < 1)) return '指示文を読めない';
+    const lim = (d: Dir) => (d === 'うえ' || d === 'した' ? rows : cols);
+    if (steps.some((s) => s.no > lim(s.dir))) return '番号が並びの数を超えている';
+    if (p.level === 1 && (rows !== 1 && cols !== 1)) return '基礎が1列でない';
+    const { r, c } = locate(steps, rows, cols);
+    return p.answers[0] === r * cols + c ? null : '正答の位置が違う';
   },
 };
 
@@ -277,7 +339,7 @@ export const dots: Skill = {
       caption: 'みほんと おなじように せんを ひく',
       stimulus: { kind: 'dots', size, segments: segs },
       choices: [{ kind: 'dots', size, segments: [] }],
-      answer: -1,
+      answers: [],
       paperOnly: true,
       explain: 'はじめの てんを きめて，みほんの せんを ひとつずつ たどる．',
     };

@@ -35,6 +35,10 @@ export function aspectOf(v: Visual): [number, number] {
       return [v.ids.length * 60, 60];
     case 'circles':
       return [120, 120];
+    case 'seesaw':
+      return [300, 150];
+    case 'stack':
+      return [320 * v.items.length, 150];
     default:
       return [120, 120];
   }
@@ -48,8 +52,39 @@ export function svgOf(v: Visual, opts: { frame?: boolean } = {}): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" font-family="sans-serif">${border}${body}</svg>`;
 }
 
+/** シーソー：支点の三角と傾いた板．物は板の両端に立てて載せる */
+function drawSeesaw(left: string[], right: string[], tilt: number, w: number, h: number): string {
+  const cx = w / 2;
+  const cy = h - 34;
+  const L = w - 44;
+  const ang = (tilt * 12 * Math.PI) / 180;
+  const dx = (Math.cos(ang) * L) / 2;
+  const dy = (Math.sin(ang) * L) / 2;
+  let out = `<polygon points="${cx},${cy} ${cx - 18},${h - 8} ${cx + 18},${h - 8}" fill="#fff" stroke="#000" stroke-width="3"/>`;
+  out += `<line x1="${cx - dx}" y1="${cy - dy}" x2="${cx + dx}" y2="${cy + dy}" stroke="#000" stroke-width="6" stroke-linecap="round"/>`;
+  const place = (ids: string[], side: -1 | 1) => {
+    const s = ids.length > 2 ? 44 : ids.length > 1 ? 54 : 70;
+    return ids
+      .map((id, i) => {
+        // 端から内側へ並べる
+        const t = (L / 2 - s / 2 - i * (s + 2)) * side;
+        const x = cx + Math.cos(ang) * t;
+        const y = cy + Math.sin(ang) * t - s / 2 - 4;
+        return cardAt(id, x, y, s);
+      })
+      .join('');
+  };
+  return out + place(left, -1) + place(right, 1);
+}
+
 function draw(v: Visual, w: number, h: number): string {
   switch (v.kind) {
+    case 'seesaw':
+      return drawSeesaw(v.left, v.right, v.tilt, w, h);
+    case 'stack':
+      return v.items
+        .map((it, i) => `<g transform="translate(${i * 320 + 10},0)">${draw(it, 300, 150)}</g>`)
+        .join('');
     case 'card':
       return cardAt(v.id, w / 2, h / 2, Math.min(w, h) * 0.9);
     case 'scatter': {

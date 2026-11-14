@@ -14,11 +14,15 @@ import {
   type Session,
   type Settings,
 } from '../db';
-import { planPrint, stats, usable } from '../select';
+import { availableSkills, levelFor, planPrint, stats, usable } from '../select';
 import { DOMAIN_NAME, SKILLS, SKILL_BY_ID, problemFromKey } from '../skills';
 import { newSeed } from '../rng';
 import { setRate, speak, stopSpeech, waitVoices } from '../speech';
 import { answerText } from './print';
+import { LEVEL_NAME } from '../gen/common';
+import { hasImage } from '../render';
+import { startFocus } from './child';
+import type { Level } from '../types';
 
 let unlocked = false;
 export const lockParent = () => (unlocked = false);
@@ -50,6 +54,7 @@ export function gate(then: () => void): void {
 }
 
 const TABS: [string, string][] = [
+  ['focus', '種類を選んで練習'],
   ['records', '学習記録'],
   ['prints', 'プリント'],
   ['enter', '結果入力'],
@@ -68,13 +73,67 @@ export async function parentView(tab: string, arg?: string): Promise<void> {
       body,
     ),
   );
-  if (tab === 'records') await records(body);
+  if (tab === 'focus') await focusView(body);
+  else if (tab === 'records') await records(body);
   else if (tab === 'prints') await prints(body);
   else if (tab === 'enter') await enter(body, arg ? Number(arg) : undefined);
   else await settingsView(body);
 }
 
 const pct = (x: { n: number; correct: number }) => (x.n ? `${x.correct}/${x.n}` : '−');
+
+/** 種類を選んで連続練習：技能・問題数・難易度を選び，子どもに渡して始める */
+async function focusView(body: HTMLElement): Promise<void> {
+  const attempts = usable(await all<Attempt>('attempts'), await all<Session>('sessions'));
+  const skills = availableSkills(SKILLS, hasImage).filter((s) => !s.paperOnly);
+  const st = stats(skills, attempts);
+  let chosen = [...st].sort((a, b) => b.priority - a.priority)[0].skill.id;
+  const list = h('div');
+  const levelSel = h('select');
+  const fillLevels = () => {
+    const sk = SKILL_BY_ID[chosen];
+    const now = levelFor(attempts, sk);
+    levelSel.replaceChildren(
+      h('option', { value: 'auto' }, `自動（今は${LEVEL_NAME[now]}から．2問続けて正解で上げ，間違えたら下げる）`),
+      ...sk.levels.map((l) => h('option', { value: String(l) }, `${LEVEL_NAME[l]}だけ`)),
+    );
+  };
+  const renderList = () => {
+    list.replaceChildren(
+      ...st.map((x) =>
+        h(
+          'label',
+          { class: 'chk', style: 'display:flex' },
+          h('input', {
+            type: 'radio',
+            name: 'focus-skill',
+            value: x.skill.id,
+            checked: x.skill.id === chosen,
+            onchange: () => {
+              chosen = x.skill.id;
+              fillLevels();
+            },
+          }),
+          `${DOMAIN_NAME[x.skill.domain]}：${x.skill.name}`,
+          h('span', { class: 'note' }, `　画面 ${pct(x.screen)}・紙 ${pct(x.paper)}`),
+        ),
+      ),
+    );
+  };
+  renderList();
+  fillLevels();
+  const count = h('select', {}, ...[5, 6, 8, 10].map((n) => h('option', { value: n, selected: n === 8 }, `${n}問`)));
+  const start = () => {
+    const lv = levelSel.value === 'auto' ? 'auto' : (Number(levelSel.value) as Level);
+    void startFocus({ skill: chosen, n: Number(count.value), level: lv });
+  };
+  body.append(
+    h('div', { class: 'card' }, h('b', {}, '練習する種類'), list),
+    h('div', { class: 'row' }, '問題数', count, '難易度', levelSel),
+    h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: start }, 'この内容で子どもに渡す')),
+    h('p', { class: 'note' }, '初期選択は「次に練習する候補」の先頭．発展では「ぜんぶ まるを」の複答が出る技能がある（同じ数・頭の音・仲間・季節）．'),
+  );
+}
 
 async function records(body: HTMLElement): Promise<void> {
   const attempts = usable(await all<Attempt>('attempts'), await all<Session>('sessions'));
@@ -106,11 +165,11 @@ async function records(body: HTMLElement): Promise<void> {
           'tr',
           {},
           h('td', {}, DOMAIN_NAME[s.skill.domain]),
-          h('td', {}, s.skill.name, s.skill.paperOnly ? '（紙専用）' : ''),
+          h('td', {}, s.skill.name, s.skill.paperOnly ? '（紙専用）' : '', s.skill.requires && !s.skill.requires.every(hasImage) ? '（絵の準備待ち）' : ''),
           h('td', { class: 'num' }, s.skill.paperOnly ? '' : pct(s.screen)),
           h('td', { class: 'num' }, pct(s.paper)),
           h('td', { class: 'num' }, pct(s.retry)),
-          h('td', { class: 'num' }, s.level === 1 ? '基礎' : '標準'),
+          h('td', { class: 'num' }, LEVEL_NAME[s.level]),
         ),
       ),
     ),
@@ -145,7 +204,7 @@ async function prints(body: HTMLElement): Promise<void> {
   // 初期選択：優先度の高い3技能＋点図形
   const top = new Set([...st].filter((s) => !s.skill.paperOnly).sort((a, b) => b.priority - a.priority).slice(0, 3).map((s) => s.skill.id));
   top.add('dots');
-  const boxes = SKILLS.map((s) => {
+  const boxes = availableSkills(SKILLS, hasImage).map((s) => {
     const cb = h('input', { type: 'checkbox', value: s.id, checked: top.has(s.id) });
     return { cb, el: h('label', { class: 'chk' }, cb, `${DOMAIN_NAME[s.domain]}：${s.name}`) };
   });
@@ -215,7 +274,7 @@ async function enter(body: HTMLElement, id?: number): Promise<void> {
           'div',
           { class: 'card' },
           h('div', { class: 'row' }, h('b', {}, `${i + 1}．`), h('button', { class: 'btn', onclick: () => speak(p.speech, () => {}) }, '🔈 読み上げ'), h('span', {}, p.speech)),
-          h('div', { class: 'note' }, `正答：${answerText(p)}　／　${SKILL_BY_ID[p.skill].name}（${p.level === 1 ? '基礎' : '標準'}）`),
+          h('div', { class: 'note' }, `正答：${answerText(p)}　／　${SKILL_BY_ID[p.skill].name}（${LEVEL_NAME[p.level]}）`),
           h(
             'div',
             { class: 'row mark3' },

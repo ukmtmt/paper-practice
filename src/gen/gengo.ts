@@ -2,7 +2,7 @@
 import type { Skill, Visual } from '../types';
 import { Rng } from '../rng';
 import { CARDS, CARD_BY_ID, CATEGORY_NAME, OPPOSITES, SUPER_CATEGORY, initialOf, seion, type Card } from '../cards';
-import { basicCheck, keyOf, placeAnswer } from './common';
+import { basicCheck, keyOf, placeAnswer, placeMany, sameSet } from './common';
 
 const INITIAL_OK = CARDS.filter((c) => !c.noInitial && c.category !== 'kazoe');
 const cardV = (c: Card): Visual => ({ kind: 'card', id: c.id });
@@ -13,9 +13,30 @@ export const initial: Skill = {
   domain: 'gengo',
   name: 'あたまの おと',
   weight: 1,
-  levels: [1, 2],
+  levels: [1, 2, 3],
   generate(level, seed) {
     const rng = new Rng(seed);
+    if (level === 3) {
+      // 発展：その音で始まる物を すべて選ぶ（6つのうち2〜3つ）
+      const sameInitial = (m: string) => INITIAL_OK.filter((d) => initialOf(d) === m);
+      const mora = initialOf(rng.pick(INITIAL_OK.filter((c) => sameInitial(initialOf(c)).length >= 2)));
+      const k = Math.min(sameInitial(mora).length, rng.int(2, 3));
+      const corrects = rng.sample(sameInitial(mora), k);
+      const wrongs = rng.sample(INITIAL_OK.filter((c) => seion(initialOf(c)) !== seion(mora)), 6 - k);
+      const { choices, answers } = placeMany(rng, corrects.map(cardV), wrongs.map(cardV));
+      return {
+        key: keyOf('initial', level, seed),
+        skill: 'initial',
+        level,
+        speech: `「${mora}」の おとから はじまる ものに ぜんぶ まるを つけましょう．`,
+        caption: `「${mora}」から はじまる もの（ぜんぶ）`,
+        choices,
+        cols: 3,
+        answers,
+        multi: true,
+        explain: `「${mora}」から はじまるのは ${corrects.map((c) => c.name).join('，')}．`,
+      };
+    }
     // 標準：みほんと同じ音で始まる別の絵を選ぶ．同じ頭の音の絵が2枚以上ある音だけ使う
     const pool =
       level === 1 ? INITIAL_OK : INITIAL_OK.filter((c) => INITIAL_OK.filter((d) => initialOf(d) === initialOf(c)).length >= 2);
@@ -38,7 +59,7 @@ export const initial: Skill = {
       stimulus: level === 1 ? undefined : cardV(sample),
       choices,
       cols: 4,
-      answer,
+      answers: [answer],
       explain:
         level === 1
           ? `${target.name}は 「${mora}」から はじまる．`
@@ -49,16 +70,16 @@ export const initial: Skill = {
     const e = basicCheck(p);
     if (e) return e;
     const mora =
-      p.level === 1 ? p.caption.match(/「(.)」/)?.[1] : p.stimulus && cardOf(p.stimulus) ? initialOf(cardOf(p.stimulus)!) : undefined;
+      p.level !== 2 ? p.caption.match(/「(.)」/)?.[1] : p.stimulus && cardOf(p.stimulus) ? initialOf(cardOf(p.stimulus)!) : undefined;
     if (!mora) return '基準の音がない';
     const cs = p.choices.map(cardOf);
     if (cs.some((c) => !c || c.noInitial)) return '語頭音に使えない絵がある';
     const hits = cs.map((c) => initialOf(c!) === mora);
-    if (hits.filter(Boolean).length !== 1) return `同じ音の選択肢が${hits.filter(Boolean).length}個`;
+    if (!p.multi && hits.filter(Boolean).length !== 1) return `同じ音の選択肢が${hits.filter(Boolean).length}個`;
     const confusing = cs.filter((c, i) => !hits[i] && seion(initialOf(c!)) === seion(mora));
     if (confusing.length) return '濁点違いの紛らわしい誤答がある';
     if (p.stimulus && p.choices.some((c) => JSON.stringify(c) === JSON.stringify(p.stimulus))) return '見本と同じ絵が選択肢にある';
-    return hits[p.answer] ? null : '正答が違う';
+    return sameSet(hits, p.answers) ? null : '正答の組み合わせが違う';
   },
 };
 
@@ -67,11 +88,31 @@ const GROUPABLE = CARDS.filter((c) => c.category !== 'kazoe');
 export const odd: Skill = {
   id: 'odd',
   domain: 'gengo',
-  name: 'なかまはずれ',
+  name: 'なかまわけ・なかまはずれ',
   weight: 1,
-  levels: [1, 2],
+  levels: [1, 2, 3],
   generate(level, seed) {
     const rng = new Rng(seed);
+    if (level === 3) {
+      // 発展：指定した仲間を すべて選ぶ．ほかは遠い仲間から選び，紛らわしさを避ける
+      const cat = rng.pick(['kudamono', 'yasai', 'doubutsu', 'norimono', 'dougu', 'mushi'] as const);
+      const k = rng.int(2, 3);
+      const corrects = rng.sample(GROUPABLE.filter((c) => c.category === cat && !c.ambiguousProduce), k);
+      const wrongs = rng.sample(GROUPABLE.filter((c) => SUPER_CATEGORY[c.category] !== SUPER_CATEGORY[cat]), 6 - k);
+      const { choices, answers } = placeMany(rng, corrects.map(cardV), wrongs.map(cardV));
+      return {
+        key: keyOf('odd', level, seed),
+        skill: 'odd',
+        level,
+        speech: `${CATEGORY_NAME[cat]}の なかまに ぜんぶ まるを つけましょう．`,
+        caption: `${CATEGORY_NAME[cat]}の なかま（ぜんぶ）`,
+        choices,
+        cols: 3,
+        answers,
+        multi: true,
+        explain: `${CATEGORY_NAME[cat]}は ${corrects.map((c) => c.name).join('，')}．`,
+      };
+    }
     let main: Card[];
     let outlier: Card;
     if (level === 1) {
@@ -105,7 +146,7 @@ export const odd: Skill = {
       caption: 'なかまで ない もの',
       choices,
       cols: 4,
-      answer,
+      answers: [answer],
       explain: `ほかは ${CATEGORY_NAME[main[0].category]}．${outlier.name}は ${CATEGORY_NAME[outlier.category]}．`,
     };
   },
@@ -114,6 +155,13 @@ export const odd: Skill = {
     if (e) return e;
     const cs = p.choices.map(cardOf);
     if (cs.some((c) => !c)) return '絵でない選択肢';
+    if (p.level === 3) {
+      const cat = (Object.keys(CATEGORY_NAME) as (keyof typeof CATEGORY_NAME)[]).find((k) => p.caption.startsWith(`${CATEGORY_NAME[k]}の なかま`));
+      if (!cat) return '仲間の名前を読めない';
+      if (cs.some((c) => c!.category !== cat && SUPER_CATEGORY[c!.category] === SUPER_CATEGORY[cat])) return '近い仲間の誤答がある';
+      if (cs.some((c) => c!.category === cat && c!.ambiguousProduce)) return 'あいまいな絵が正答にある';
+      return sameSet(cs.map((c) => c!.category === cat), p.answers) ? null : '正答の組み合わせが違う';
+    }
     const cats = cs.map((c) => c!.category);
     const counts = new Map<string, number>();
     cats.forEach((x) => counts.set(x, (counts.get(x) ?? 0) + 1));
@@ -121,7 +169,7 @@ export const odd: Skill = {
     const minority = cats.filter((x) => counts.get(x) === 1);
     if (minority.length !== 1) return '仲間はずれが1つに決まらない';
     if (p.level === 2 && cs.some((c) => c!.ambiguousProduce)) return 'くだもの・やさいがあいまいな絵がある';
-    return counts.get(cats[p.answer]) === 1 ? null : '正答が違う';
+    return counts.get(cats[p.answers[0]]) === 1 ? null : '正答が違う';
   },
 };
 
@@ -151,7 +199,7 @@ export const opposite: Skill = {
       stimulus: v(shown),
       choices,
       cols: 4,
-      answer,
+      answers: [answer],
       explain: `「${shown.word}」の はんたいは 「${partner.word}」．`,
     };
   },
@@ -167,6 +215,6 @@ export const opposite: Skill = {
     if (ids.filter((x) => x === partner).length !== 1) return '対になる絵が1つでない';
     const sameGroup = ids.filter((x) => x !== partner && OPPOSITES.some((o) => o.group === pair.group && (o.a.id === x || o.b.id === x)));
     if (sameGroup.length) return '意味の近い組の絵が誤答にある';
-    return ids[p.answer] === partner ? null : '正答が違う';
+    return ids[p.answers[0]] === partner ? null : '正答が違う';
   },
 };

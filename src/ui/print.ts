@@ -3,6 +3,7 @@ import { go, h, mount } from '../dom';
 import { all, type PrintSet } from '../db';
 import { problemFromKey, SKILL_BY_ID } from '../skills';
 import { svgOf } from '../render';
+import { LEVEL_NAME } from '../gen/common';
 import type { Problem } from '../types';
 
 const MARU = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫';
@@ -11,10 +12,15 @@ const MARU = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫';
 export function answerText(p: Problem): string {
   if (p.paperOnly) return '見本と同じ線が引けていれば正答';
   const cols = p.cols ?? p.choices.length;
-  const r = Math.floor(p.answer / cols) + 1;
-  const c = (p.answer % cols) + 1;
   const rows = Math.ceil(p.choices.length / cols);
-  return rows > 1 ? `上から${r}段目・左から${c}番目` : `左から${c}番目`;
+  const one = (a: number) => {
+    const r = Math.floor(a / cols) + 1;
+    const c = (a % cols) + 1;
+    if (cols === 1) return `上から${r}番目`;
+    return rows > 1 ? `上から${r}段目・左から${c}番目` : `左から${c}番目`;
+  };
+  const list = p.answers.map(one).join('，');
+  return p.multi ? `${list}（${p.answers.length}つ．すべて選べて正答）` : list;
 }
 
 function childQ(p: Problem, k: number): HTMLElement {
@@ -97,7 +103,7 @@ export async function printView(id: number): Promise<void> {
           h('td', {}, MARU[i]),
           h('td', {}, p.speech),
           h('td', {}, answerText(p), h('div', { style: 'font-size:9pt' }, p.explain)),
-          h('td', {}, `${SKILL_BY_ID[p.skill].name}（${p.level === 1 ? '基礎' : '標準'}）`, h('div', { style: 'font-size:8pt;color:#555' }, p.key)),
+          h('td', {}, `${SKILL_BY_ID[p.skill].name}（${LEVEL_NAME[p.level]}）`, h('div', { style: 'font-size:8pt;color:#555' }, p.key)),
         ),
       ),
     ),

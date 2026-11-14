@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SKILLS, problemFromKey } from '../src/skills';
-import { CARDS, OPPOSITES } from '../src/cards';
+import { CARDS, OPPOSITES, SEASON_CARDS } from '../src/cards';
 
 const N = 1000;
 
@@ -25,11 +25,18 @@ describe.each(SKILLS.flatMap((s) => s.levels.map((level) => [s.id, level] as con
     }
   });
 
-  it.skipIf(skill.paperOnly)('正答番号をずらすと検査が失敗する（検査が働いている）', () => {
+  it.skipIf(skill.paperOnly)('正答をずらす・欠く・足すと検査が失敗する（検査が働いている）', () => {
     for (let seed = 1; seed <= 100; seed++) {
       const p = skill.generate(level, seed);
-      const bad = { ...p, answer: (p.answer + 1) % p.choices.length };
-      expect(skill.check(bad), `seed ${seed}`).not.toBeNull();
+      const n = p.choices.length;
+      const wrongs = [...Array(n).keys()].filter((k) => !p.answers.includes(k));
+      const shifted = { ...p, answers: p.answers.map((a) => (a + 1) % n) };
+      if (JSON.stringify([...shifted.answers].sort()) !== JSON.stringify([...p.answers].sort()))
+        expect(skill.check(shifted), `ずらす seed ${seed}`).not.toBeNull();
+      if (p.multi) {
+        expect(skill.check({ ...p, answers: p.answers.slice(1) }), `欠く seed ${seed}`).not.toBeNull();
+        expect(skill.check({ ...p, answers: [...p.answers, wrongs[0]] }), `足す seed ${seed}`).not.toBeNull();
+      }
     }
   });
 
@@ -39,13 +46,14 @@ describe.each(SKILLS.flatMap((s) => s.levels.map((level) => [s.id, level] as con
       const p = skill.generate(level, seed);
       keys.add(JSON.stringify([p.stimulus, p.choices, p.caption]));
     }
-    expect(keys.size).toBeGreaterThan(id === 'opposite' ? 15 : 40);
+    expect(keys.size).toBeGreaterThan(id === 'opposite' ? 15 : id === 'weight' && level === 1 ? 30 : 40);
   });
 });
 
 it('絵のIDが依頼文と重複しない', () => {
-  const ids = [...CARDS.map((c) => c.id), ...OPPOSITES.flatMap((p) => [p.a.id, p.b.id])];
+  const ids = [...CARDS.map((c) => c.id), ...OPPOSITES.flatMap((p) => [p.a.id, p.b.id]), ...SEASON_CARDS.map((c) => c.id)];
   expect(new Set(ids).size).toBe(ids.length);
+  expect(SEASON_CARDS.length).toBe(28);
   expect(CARDS.length).toBe(50);
   expect(OPPOSITES.length).toBe(10);
 });

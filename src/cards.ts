@@ -119,6 +119,8 @@ export const OPPOSITES: OppositePair[] = [
 /** 画像IDから表示名（画像がないときの仮表示に使う） */
 export function labelOf(id: string): string {
   if (CARD_BY_ID[id]) return CARD_BY_ID[id].name;
+  const sea = SEASON_CARDS.find((c) => c.id === id);
+  if (sea) return sea.name;
   for (const p of OPPOSITES) {
     if (p.a.id === id) return p.a.word;
     if (p.b.id === id) return p.b.word;
@@ -136,3 +138,29 @@ export function seion(ch: string): string {
   const n = ch.normalize('NFD').replace(/[゙゚]/g, '');
   return n.normalize('NFC');
 }
+
+// ---- 季節の絵（依頼文 v1-1 §6）．季節の問題だけで使い，ほかの問題には混ぜない ----
+
+export type Season = 'haru' | 'natsu' | 'aki' | 'fuyu';
+export const SEASON_NAME: Record<Season, string> = { haru: 'はる', natsu: 'なつ', aki: 'あき', fuyu: 'ふゆ' };
+
+export interface SeasonCard {
+  id: string;
+  name: string;
+  season: Season;
+}
+
+const sc = (season: Season, list: [string, string][]): SeasonCard[] => list.map(([id, name]) => ({ id, name, season }));
+
+/** 新しく作る季節の絵（28枚） */
+export const SEASON_CARDS: SeasonCard[] = [
+  ...sc('haru', [['sakura', 'さくら'], ['tulip', 'ちゅーりっぷ'], ['tanpopo', 'たんぽぽ'], ['tsukushi', 'つくし'], ['koinobori', 'こいのぼり'], ['ohinasama', 'おひなさま'], ['otamajakushi', 'おたまじゃくし']]),
+  ...sc('natsu', [['himawari', 'ひまわり'], ['asagao', 'あさがお'], ['ukiwa', 'うきわ'], ['kakigoori', 'かきごおり'], ['hanabi', 'はなび'], ['uchiwa', 'うちわ'], ['senpuuki', 'せんぷうき']]),
+  ...sc('aki', [['momiji', 'もみじ'], ['ichou', 'いちょう'], ['donguri', 'どんぐり'], ['kuri', 'くり'], ['otsukimi', 'おつきみ'], ['kinoko', 'きのこ'], ['satsumaimo', 'さつまいも']]),
+  ...sc('fuyu', [['yukidaruma', 'ゆきだるま'], ['tebukuro', 'てぶくろ'], ['kotatsu', 'こたつ'], ['kagamimochi', 'かがみもち'], ['tako', 'たこあげ'], ['christmastree', 'くりすますつりー'], ['mafuraa', 'まふらー']]),
+];
+
+/** 既存の絵カードのうち季節がはっきりした物も季節の問題に併用する */
+export const SEASON_EXTRA: SeasonCard[] = sc('natsu', [['suika', 'すいか'], ['semi', 'せみ'], ['kabutomushi', 'かぶとむし']]);
+
+export const SEASON_ALL: SeasonCard[] = [...SEASON_CARDS, ...SEASON_EXTRA];

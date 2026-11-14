@@ -60,11 +60,29 @@ export function countOf(v: Visual, id?: string): number {
   return -1;
 }
 
-/** 共通の検査：正答番号が範囲内，選択肢が重複しない */
+/** 共通の検査：正答番号が範囲内，選択肢が重複しない，単答なら正答は1つ */
 export function basicCheck(p: Problem): string | null {
   if (p.paperOnly) return null;
-  if (p.answer < 0 || p.answer >= p.choices.length) return `正答番号が範囲外: ${p.answer}`;
+  if (!p.answers.length) return '正答がない';
+  if (p.answers.some((a) => a < 0 || a >= p.choices.length)) return `正答番号が範囲外: ${p.answers}`;
+  if (new Set(p.answers).size !== p.answers.length) return '正答番号が重複している';
+  if (!p.multi && p.answers.length !== 1) return '単答なのに正答が複数';
+  if (p.multi && p.answers.length < 2) return '複答なのに正答が1つ';
   const seen = new Set(p.choices.map((c) => JSON.stringify(c)));
   if (seen.size !== p.choices.length) return '同じ選択肢が重複している';
   return null;
 }
+
+/** 「条件に合う選択肢」の番号の集合が正答と一致するか */
+export function sameSet(hits: boolean[], answers: number[]): boolean {
+  const want = hits.flatMap((h, i) => (h ? [i] : []));
+  return want.length === answers.length && want.every((i) => answers.includes(i));
+}
+
+/** 複答：正答 k 個と誤答をまとめて並べ替え，正答の番号を返す */
+export function placeMany<T>(rng: Rng, corrects: T[], wrongs: T[]): { choices: T[]; answers: number[] } {
+  const tagged = rng.shuffle([...corrects.map((v) => ({ v, ok: true })), ...wrongs.map((v) => ({ v, ok: false }))]);
+  return { choices: tagged.map((t) => t.v), answers: tagged.flatMap((t, i) => (t.ok ? [i] : [])) };
+}
+
+export const LEVEL_NAME: Record<number, string> = { 1: '基礎', 2: '標準', 3: '発展' };

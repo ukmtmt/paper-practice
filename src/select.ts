@@ -26,17 +26,36 @@ export function priority(attempts: Attempt[], s: Skill): number {
   return s.weight * (w === undefined ? 1.6 : 1 + 2 * w);
 }
 
-/** 基礎で直近3問正解なら標準へ，標準で直近2問続けて誤答なら基礎へ戻す */
+/**
+ * 次に出す難易度：今の段階で直近3問続けて正解なら1段上げ，直近2問続けて誤答なら1段下げる．
+ * 記録がなければ最も易しい段階から．
+ */
 export function levelFor(attempts: Attempt[], s: Skill): Level {
-  if (!s.levels.includes(2)) return 1;
+  const levels = s.levels;
   const r = bySkill(attempts, s.id);
-  const last = r[0]?.level ?? 1;
-  if (last === 1) {
-    const l1 = r.filter((a) => a.level === 1).slice(0, 3);
-    return l1.length === 3 && l1.every((a) => a.result === 'correct') && r[0].result === 'correct' ? 2 : 1;
+  if (!r.length) return levels[0];
+  const cur = levels.includes(r[0].level) ? r[0].level : levels[0];
+  const idx = levels.indexOf(cur);
+  const atCur = r.filter((a) => a.level === cur);
+  if (idx < levels.length - 1 && atCur.length >= 3 && atCur.slice(0, 3).every((a) => a.result === 'correct') && r[0].result === 'correct')
+    return levels[idx + 1];
+  if (idx > 0 && atCur.length >= 2 && atCur.slice(0, 2).every((a) => a.result !== 'correct')) return levels[idx - 1];
+  return cur;
+}
+
+/** 連続練習の途中で難易度を変える：2問続けて正解で1段上げ，誤答・未解答で1段下げる */
+export function stepLevel(levels: Level[], level: Level, streak: number, last: Attempt['result']): { level: Level; streak: number } {
+  const idx = levels.indexOf(level);
+  if (last === 'correct') {
+    if (streak + 1 >= 2 && idx < levels.length - 1) return { level: levels[idx + 1], streak: 0 };
+    return { level, streak: streak + 1 };
   }
-  const l2 = r.filter((a) => a.level === 2).slice(0, 2);
-  return l2.length === 2 && l2.every((a) => a.result !== 'correct') ? 1 : 2;
+  return { level: idx > 0 ? levels[idx - 1] : level, streak: 0 };
+}
+
+/** 必要な絵が揃っている技能だけを出題対象にする */
+export function availableSkills(skills: Skill[], hasImage: (id: string) => boolean): Skill[] {
+  return skills.filter((s) => !s.requires || s.requires.every(hasImage));
 }
 
 function weightedPick<T>(rng: Rng, xs: T[], w: (x: T) => number): T {

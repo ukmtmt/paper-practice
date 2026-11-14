@@ -49,6 +49,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-
 .choice:disabled { opacity: 1; }
 .choice .mark { position: absolute; inset: -6px; pointer-events: none; }
 .choice.answer { border: 6px solid var(--fg); }
+.choice .badge { position: absolute; left: 4px; top: 4px; background: var(--fg); color: var(--bg); border-radius: 10px; padding: 2px 8px; font-size: 18px; font-weight: bold; }
 .play.ph-listening .choice { filter: grayscale(1) opacity(0.75); }
 .play footer { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 10px 12px 16px; min-height: 92px; }
 .go { min-width: 240px; min-height: 72px; font-size: 28px; border-radius: 36px; border: 4px solid var(--fg); background: var(--fg); color: var(--bg); }

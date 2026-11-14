@@ -1,12 +1,13 @@
 // 子ども用：ホーム → 練習・本番風 → 問題 → おしまい
 import { go, h, longPress, mount, uid } from '../dom';
 import { all, getSettings, put, type Attempt, type Mode, type Result, type Session } from '../db';
-import { planSession, usable } from '../select';
+import { availableSkills, levelFor, planSession, stepLevel, usable } from '../select';
 import { SKILLS, SKILL_BY_ID, problemFromKey } from '../skills';
-import { aspectOf, svgOf } from '../render';
+import { aspectOf, hasImage, svgOf } from '../render';
 import { newSeed } from '../rng';
 import { setRate, speak, stopSpeech, waitVoices } from '../speech';
-import type { Problem } from '../types';
+import { positionMarks } from '../gen/zukei';
+import type { Level, Problem } from '../types';
 
 const MARK =
   '<svg class="mark" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="46" ry="44" fill="none" stroke="#000" stroke-width="4" vector-effect="non-scaling-stroke" style="stroke-width:6px"/></svg>';
@@ -35,11 +36,44 @@ async function startPlay(mode: Mode): Promise<void> {
   const attempts = await all<Attempt>('attempts');
   const sessions = await all<Session>('sessions');
   const n = mode === 'mock' ? settings.mockSize : settings.practiceSize;
-  const keys = planSession(SKILLS, usable(attempts, sessions), n, newSeed());
+  const keys = planSession(availableSkills(SKILLS, hasImage), usable(attempts, sessions), n, newSeed());
   const session: Session = { id: uid(), at: Date.now(), mode, keys, completed: false };
   await put('sessions', session);
   const seen = new Set(attempts.map((a) => a.key));
-  new Player(session, keys.map(problemFromKey), seen, mode === 'mock' ? settings.mockReplays : 0).show();
+  const probs = keys.map(problemFromKey);
+  new Player(session, keys.length, (i) => probs[i], seen, mode === 'mock' ? settings.mockReplays : 0).show();
+}
+
+export interface FocusConfig {
+  skill: string;
+  n: number;
+  /** 'auto' は記録から始め，2問続けて正解で1段上げ，間違えたら1段下げる */
+  level: Level | 'auto';
+}
+
+/** 種類を選んで連続練習（保護者画面から始める） */
+export async function startFocus(cfg: FocusConfig): Promise<void> {
+  const settings = await getSettings();
+  setRate(settings.rate);
+  const attempts = await all<Attempt>('attempts');
+  const sessions = await all<Session>('sessions');
+  const skill = SKILL_BY_ID[cfg.skill];
+  let level: Level = cfg.level === 'auto' ? levelFor(usable(attempts, sessions), skill) : cfg.level;
+  let streak = 0;
+  const session: Session = { id: uid(), at: Date.now(), mode: 'practice', keys: [], completed: false, focus: cfg.skill };
+  await put('sessions', session);
+  const seen = new Set(attempts.map((a) => a.key));
+  const made: Problem[] = [];
+  const next = (i: number, results: Result[]): Problem => {
+    if (made[i]) return made[i];
+    if (cfg.level === 'auto' && i > 0) ({ level, streak } = stepLevel(skill.levels, level, streak, results[i - 1]));
+    const p = skill.generate(level, newSeed());
+    made[i] = p;
+    session.keys.push(p.key);
+    return p;
+  };
+  history.replaceState(null, '', '#focus');
+  new Player(session, cfg.n, next, seen, 0).show();
 }
 
 type Phase = 'ready' | 'listening' | 'answering' | 'feedback';
@@ -47,7 +81,8 @@ type Phase = 'ready' | 'listening' | 'answering' | 'feedback';
 class Player {
   private i = 0;
   private phase: Phase = 'ready';
-  private selected: number | null = null;
+  private selected = new Set<number>();
+  private problems: Problem[] = [];
   private plays = 0;
   private results: Result[] = [];
   private root!: HTMLElement;
@@ -63,7 +98,9 @@ class Player {
 
   constructor(
     private session: Session,
-    private problems: Problem[],
+    private total: number,
+    /** i 問目を返す．連続練習では前の結果を見て難易度を変える */
+    private source: (i: number, results: Result[]) => Problem,
     private seen: Set<string>,
     /** 本番風の読み上げ回数の上限．0 は無制限（練習） */
     private maxPlays: number,
@@ -72,6 +109,7 @@ class Player {
   }
 
   private get p(): Problem {
+    this.problems[this.i] ??= this.source(this.i, this.results);
     return this.problems[this.i];
   }
   private get mock(): boolean {
@@ -100,7 +138,9 @@ class Player {
     if (this.phase !== 'answering') return;
     this.phase = 'feedback'; // 連打で二重に保存しない
     const p = this.p;
-    const result: Result = this.selected === null ? 'none' : this.selected === p.answer ? 'correct' : 'wrong';
+    const sel = [...this.selected];
+    const exact = sel.length === p.answers.length && sel.every((k) => p.answers.includes(k));
+    const result: Result = sel.length === 0 ? 'none' : exact ? 'correct' : 'wrong';
     this.results[this.i] = result;
     const a: Attempt = {
       id: `${this.session.id}:${this.i}`,
@@ -122,9 +162,9 @@ class Player {
 
   private async next(): Promise<void> {
     stopSpeech();
-    if (this.i + 1 >= this.problems.length) return this.finish(true);
+    if (this.i + 1 >= this.total) return this.finish(true);
     this.i++;
-    this.selected = null;
+    this.selected = new Set();
     this.plays = 0;
     this.listen(); // 「つぎへ」のタップの中で読み上げを始める（iOSの制約）
   }
@@ -164,17 +204,24 @@ class Player {
       class: `choices ${p.choices.length > 9 ? 'dense' : ''}`,
       style: `grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, minmax(0, 1fr));`,
     });
+    // 位置の問題は，解説のときに数える道すじへ番号を付ける
+    const marks = fb && !this.mock && p.skill === 'position' ? positionMarks(p) : new Map<number, string>();
     p.choices.forEach((c, k) => {
       const [vw, vh] = aspectOf(c);
       const b = h('button', {
-        class: `choice ${fb && !this.mock && k === p.answer ? 'answer' : ''}`,
+        class: `choice ${fb && !this.mock && p.answers.includes(k) ? 'answer' : ''}`,
         style: `--r: ${(vw / vh).toFixed(3)}`,
         'aria-label': `${k + 1}ばんめ`,
         disabled: this.phase !== 'answering',
-        html: svgOf(c) + (this.selected === k ? MARK : ''),
+        html: svgOf(c) + (this.selected.has(k) ? MARK : '') + (marks.has(k) ? `<span class="badge">${marks.get(k)}</span>` : ''),
         onclick: () => {
           if (this.phase !== 'answering') return;
-          this.selected = this.selected === k ? null : k;
+          if (p.multi) {
+            if (this.selected.has(k)) this.selected.delete(k);
+            else this.selected.add(k);
+          } else {
+            this.selected = this.selected.has(k) ? new Set() : new Set([k]);
+          }
           this.render();
         },
       });
@@ -194,13 +241,17 @@ class Player {
         'footer',
         {},
         h('div', { class: 'feedback' }, h('b', {}, ok ? '⭕ せいかい！' : 'こたえは ふとい わくの もの'), p.explain),
-        h('button', { class: 'go', onclick: () => this.next() }, this.i + 1 >= this.problems.length ? 'おしまい' : 'つぎへ'),
+        h('button', { class: 'go', onclick: () => this.next() }, this.i + 1 >= this.total ? 'おしまい' : 'つぎへ'),
       );
     } else {
       footer = h(
         'footer',
         {},
-        h('button', { class: 'go', disabled: this.phase !== 'answering', onclick: () => this.confirm() }, this.selected === null ? 'わからない' : 'これに する'),
+        h(
+          'button',
+          { class: 'go', disabled: this.phase !== 'answering', onclick: () => this.confirm() },
+          this.selected.size === 0 ? 'わからない' : p.multi ? 'これで おわり' : 'これに する',
+        ),
       );
     }
 
@@ -216,7 +267,7 @@ class Player {
           onclick: () => canReplay && this.listen(),
         }, '🔈'),
         h('div', { class: 'caption' }, this.mock ? '' : p.caption),
-        h('div', { class: 'progress' }, `${this.i + 1} / ${this.problems.length}`),
+        h('div', { class: 'progress' }, `${this.i + 1} / ${this.total}`),
         h('button', { class: 'icon small', 'aria-label': 'おわる', onclick: () => this.quit() }, '✕'),
       ),
       h('div', { class: 'stage' }, stim, choices),
@@ -239,7 +290,7 @@ class Player {
               h('div', {
                 style: `display:grid;gap:6px;grid-template-columns:repeat(${Math.min(p.cols ?? p.choices.length, 8)},1fr)`,
                 html: p.choices
-                  .map((c, j) => `<div style="border:${j === p.answer ? '4px solid #000' : '1px solid #ccc'};border-radius:6px">${svgOf(c)}</div>`)
+                  .map((c, j) => `<div style="border:${p.answers.includes(j) ? '4px solid #000' : '1px solid #ccc'};border-radius:6px">${svgOf(c)}</div>`)
                   .join(''),
               }),
               h('div', { class: 'note' }, p.explain),
@@ -251,7 +302,7 @@ class Player {
       h(
         'div',
         { class: 'done' },
-        h('h1', {}, this.mock ? `おしまい！ ${ok} / ${this.problems.length}` : `よく がんばったね！ ⭕ ${ok}こ`),
+        h('h1', {}, this.mock ? `おしまい！ ${ok} / ${this.total}` : `よく がんばったね！ ⭕ ${ok}こ`),
         h('div', { class: 'review' }, ...items),
         h('button', { class: 'go', onclick: () => go('') }, 'もどる'),
       ),

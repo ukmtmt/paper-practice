@@ -9,7 +9,7 @@ async function route(): Promise<void> {
   stopSpeech();
   document.body.className = '';
   const [name, a, b] = location.hash.replace(/^#/, '').split('/');
-  if (name === 'parent') return gate(() => void parentView(a || 'records', b));
+  if (name === 'parent') return gate(() => void parentView(a || 'focus', b));
   if (name === 'print') return gate(() => void printView(Number(a)));
   lockParent();
   await childHome(() => go('#parent'));

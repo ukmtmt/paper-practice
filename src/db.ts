@@ -27,6 +27,8 @@ export interface Session {
   keys: string[];
   /** 最後まで終えたか．途中でやめた本番風セットは集計で区別する */
   completed: boolean;
+  /** 種類を選んで連続練習したときの技能 */
+  focus?: string;
 }
 
 export interface PrintSet {
