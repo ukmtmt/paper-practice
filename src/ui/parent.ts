@@ -30,7 +30,7 @@ export function gate(then: () => void): void {
   const b = 4 + Math.floor(Math.random() * 6);
   const input = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', 'aria-label': 'こたえ' });
   const check = () => {
-    if (Number(input.value) === a + b) {
+    if (Number(input.value.normalize("NFKC").trim()) === a + b) { // 日本語キーボードの全角数字も受け付ける
       unlocked = true;
       then();
     } else input.value = '';
