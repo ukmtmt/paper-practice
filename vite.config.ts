@@ -40,11 +40,16 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then(
-      (hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : null) || fetch(req),
-    ).then((r) => r || fetch(req)),
-  );
+  if (req.mode === 'navigate') {
+    // ページ本体はオンラインなら最新を取り，オフラインのときだけキャッシュを使う（版の食い違いを防ぐ）
+    e.respondWith(
+      fetch(req)
+        .then((r) => (r.ok ? r : Promise.reject(r)))
+        .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('./index.html'))),
+    );
+    return;
+  }
+  e.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req)));
 });
 `,
       );
