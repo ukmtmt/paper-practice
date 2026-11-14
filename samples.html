@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>サンプル確認</title>
+    <style>
+      body { font-family: sans-serif; margin: 16px; color: #000; background: #fff; }
+      h2 { border-bottom: 2px solid #000; margin-top: 32px; }
+      .prob { border: 1px solid #999; border-radius: 8px; padding: 12px; margin: 12px 0; break-inside: avoid; }
+      .meta { font-size: 12px; color: #555; }
+      .speech { margin: 4px 0 8px; }
+      .stim svg { max-width: 420px; max-height: 160px; }
+      .choices { display: grid; gap: 8px; max-width: 640px; }
+      .choice { border: 2px solid transparent; border-radius: 6px; padding: 2px; }
+      .choice.ok { border-color: #000; border-width: 4px; }
+      .choice svg { width: 100%; height: auto; max-height: 150px; }
+      .explain { font-size: 14px; margin-top: 6px; }
+      .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+      .gallery figure { margin: 0; text-align: center; font-size: 13px; }
+      .gallery svg { width: 100%; border: 1px solid #ccc; }
+      .missing { color: #b00; }
+      nav a { margin-right: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>サンプル問題と絵カードの確認</h1>
+    <p>太枠が正答．点線の四角は，まだ画像がない絵の仮表示である．</p>
+    <nav id="nav"></nav>
+    <div id="root"></div>
+    <script type="module" src="./src/samples.ts"></script>
+  </body>
+</html>

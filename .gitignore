@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.DS_Store
+.claude/
+# 要件定義などの文書は公開リポジトリに含めない
+/2026*.md
