@@ -20,5 +20,17 @@ window.addEventListener('hashchange', () => void route());
 void route();
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  // 新しい版が入ったら，練習中でなければ（ホーム画面にいるとき）読み込み直す
+  let updated = false;
+  const reloadIfIdle = () => {
+    if (updated && location.hash.replace(/^#/, '') === '') location.reload();
+  };
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return; // 初回のインストールでは読み込み直さない
+    updated = true;
+    reloadIfIdle();
+  });
+  window.addEventListener('hashchange', reloadIfIdle);
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

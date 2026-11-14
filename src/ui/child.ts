@@ -3,7 +3,7 @@ import { go, h, longPress, mount, uid } from '../dom';
 import { all, getSettings, put, type Attempt, type Mode, type Result, type Session } from '../db';
 import { planSession, usable } from '../select';
 import { SKILLS, SKILL_BY_ID, problemFromKey } from '../skills';
-import { svgOf } from '../render';
+import { aspectOf, svgOf } from '../render';
 import { newSeed } from '../rng';
 import { setRate, speak, stopSpeech, waitVoices } from '../speech';
 import type { Problem } from '../types';
@@ -165,8 +165,10 @@ class Player {
       style: `grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, minmax(0, 1fr));`,
     });
     p.choices.forEach((c, k) => {
+      const [vw, vh] = aspectOf(c);
       const b = h('button', {
         class: `choice ${fb && !this.mock && k === p.answer ? 'answer' : ''}`,
+        style: `--r: ${(vw / vh).toFixed(3)}`,
         'aria-label': `${k + 1}ばんめ`,
         disabled: this.phase !== 'answering',
         html: svgOf(c) + (this.selected === k ? MARK : ''),
@@ -176,7 +178,7 @@ class Player {
           this.render();
         },
       });
-      choices.append(b);
+      choices.append(h('div', { class: 'cell' }, b));
     });
 
     const stim = p.stimulus
