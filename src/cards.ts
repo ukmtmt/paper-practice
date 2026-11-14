@@ -52,7 +52,7 @@ export const CARDS: Card[] = [
   c('meron', 'めろん', 'kudamono', { ambiguousProduce: true }),
   c('tomato', 'とまと', 'yasai', { ambiguousProduce: true }),
   c('ninjin', 'にんじん', 'yasai'),
-  c('daikon', 'だいこん', 'yasai', { noInitial: true }), // 白黒だと にんじん と見分けにくい（描き直したら外す）
+  c('daikon', 'だいこん', 'yasai'),
   c('kabocha', 'かぼちゃ', 'yasai'),
   c('nasu', 'なす', 'yasai'),
   c('tamanegi', 'たまねぎ', 'yasai'),
